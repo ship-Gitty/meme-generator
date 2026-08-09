@@ -10,21 +10,28 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 
 **Goal:** a deployable skeleton with working login and an empty dashboard. No meme generation yet.
 
-- [ ] Next.js (App Router) project initialized
-- [ ] Auth.js configured with login flow
-- [ ] `users` table extended with `role` enum (`user`/`admin`, default `user`, not user-settable) — see SPEC.md Section 14
-- [ ] `memes` table created per SPEC.md Section 14 (unused fields like `visibility`/`share_slug` included now, per R12)
-- [ ] Vercel Blob connected
-- [ ] Vercel Postgres connected
-- [ ] Minimalist login screen (NFR-10)
-- [ ] Dashboard shell with empty state for new users (FR-2)
-- [ ] `.env.example` created listing all Phase 1 environment variables
-- [ ] Route protection: `/dashboard` inaccessible without a valid session (FR-1)
+- [x] Next.js (App Router) project initialized
+- [x] Auth.js configured with login flow
+- [x] `users` table extended with `role` enum (`user`/`admin`, default `user`, not user-settable) — see SPEC.md Section 14
+- [x] `memes` table created per SPEC.md Section 14 (unused fields like `visibility`/`share_slug` included now, per R12)
+- [x] Vercel Blob connected
+- [x] Vercel Postgres connected
+- [x] Minimalist login screen (NFR-10)
+- [x] Dashboard shell with empty state for new users (FR-2)
+- [x] `.env.example` created listing all Phase 1 environment variables
+- [x] Route protection: `/dashboard` inaccessible without a valid session (FR-1)
 
 **Security audit for this phase:** Audit 1 (Authentication & Authorization) — see `SECURITY_AUDITS.md`
 
 **Notes:**
-_(add dated notes here as work happens, e.g. "2026-08-10: Auth.js using GitHub provider, email/password deferred to later")_
+- 2026-08-09: Next.js scaffolded at v16.3.0 (React 19.2.8), well ahead of any prior reference material — Next 16 renamed Middleware to "Proxy" (`src/proxy.ts`, same functional API). Confirmed via the framework's own bundled docs before writing route-protection code.
+- 2026-08-09: Auth.js provider is Google OAuth (`next-auth@5.0.0-beta.32`, still in beta upstream but peer-declares Next 16 support and is the current App-Router-native path). Credentials/email-password deferred to later if ever needed.
+- 2026-08-09: `@vercel/postgres` is deprecated upstream (Vercel Postgres is now Neon-backed). Swapped to `@neondatabase/serverless` + Drizzle's `neon-http` driver — same "Vercel Postgres" product from the dashboard's perspective, different SDK. Flagged to and confirmed with the user before switching.
+- 2026-08-09: Chose Drizzle ORM (not raw SQL) to define/query `users`/`accounts`/`sessions`/`verificationTokens` (Auth.js adapter requirements) and `memes`. Not mandated by SPEC.md, not a deviation from it either — implementation detail for the same data model in Section 14.
+- 2026-08-09: `visibility` enum values set to `('private', 'public')` — SPEC.md marks this field "reserved for future sharing feature" without enumerating values; chose the minimal two-state default rather than over-specifying an unbuilt feature.
+- 2026-08-09: Route protection in `src/proxy.ts` does an optimistic session check only (per Next.js's own auth guidance), but since Auth.js is configured with the `database` session strategy (not JWT), an authenticated request still costs one DB lookup per proxy invocation. Acceptable for Phase 1; revisit if this becomes a real perf issue.
+- 2026-08-09: Google OAuth Client ID/Secret and the real Neon `DATABASE_URL`/Blob token are not yet provisioned — `.env.local` holds placeholders (a syntactically-valid-but-fake Postgres URL, since `neon()` validates the URL string eagerly at import and a literal `REPLACE_ME` broke the build). Login and DB writes won't work end-to-end until real values are filled in; route protection itself was verified working against an unauthenticated session with no DB calls required.
+- 2026-08-09: Local dev machine had no Git, Node.js, or GitHub CLI installed; installed via `winget` (Git 2.55, Node 24.19 LTS, GitHub CLI 2.97) before any of the above.
 
 ---
 
