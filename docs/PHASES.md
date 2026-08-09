@@ -40,23 +40,35 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` complete
 
 **Goal:** a user can submit a prompt and get back a rendered meme draft (not yet editable or saved).
 
-- [ ] `/api/generate` route scaffolded, auth-checked
-- [ ] Claude API integration: prompt → keywords + caption (FR-4)
-- [ ] Curated template library (30-50 templates) stored in Vercel Blob, checked first (R1/R13 mitigation)
-- [ ] Upstash Redis cache of prior search results, checked second
-- [ ] Giphy API integration (production key, not beta) — checked third
-- [ ] Imgflip API integration — checked alongside Giphy
-- [ ] Claude re-ranking step: pick best of 10-15 candidates against original prompt (FR-5)
-- [ ] Gemini API fallback, triggered only when no candidate scores well (FR-6)
-- [ ] Moderation check (OpenAI Moderation or Perspective API) on generated caption before render (FR-19)
-- [ ] Render module: composite caption onto image, Impact-style font (FR-7)
-- [ ] Draft returned to browser, not yet persisted (FR-8)
-- [ ] Retry/backoff/circuit-breaker on all external API calls (R3 mitigation)
-- [ ] Per-user rate limiting on generation requests (NFR-6)
+- [x] `/api/generate` route scaffolded, auth-checked
+- [x] Claude API integration: prompt → keywords + caption (FR-4) — **live-tested**
+- [x] Curated template library (40 templates) stored in Vercel Blob, checked first (R1/R13 mitigation) — **live-seeded and tested**
+- [x] Upstash Redis cache of prior search results, checked second — code complete, **not yet live-tested** (no Upstash account provisioned)
+- [x] Giphy API integration (production key, not beta) — checked third — code complete, **not yet live-tested** (no Giphy key at all yet, beta or production)
+- [x] Imgflip API integration — checked alongside Giphy — code complete, **not yet live-tested** (blocked on the Redis circuit-breaker dependency, not Imgflip itself — Imgflip needs no key)
+- [x] Claude re-ranking step: pick best of 10-15 candidates against original prompt (FR-5) — **live-tested**
+- [x] Gemini API fallback, triggered only when no candidate scores well (FR-6) — code complete, **not yet live-tested** (no Gemini key yet)
+- [x] Moderation check (OpenAI Moderation or Perspective API) on generated caption before render (FR-19) — code complete, **not yet live-tested** (no OpenAI key yet)
+- [x] Render module: composite caption onto image, Impact-style font (FR-7) — **live-tested**, visually confirmed correct
+- [x] Draft returned to browser, not yet persisted (FR-8)
+- [x] Retry/backoff/circuit-breaker on all external API calls (R3 mitigation)
+- [x] Per-user rate limiting on generation requests (NFR-6) — code complete, not yet live-tested (same Redis dependency)
 
-**Security audit for this phase:** Audit 2 (Injection & Input Validation) — focus on the prompt field and any URL-fetching logic (SSRF risk from image URLs)
+**Security audit for this phase:** Audit 2 (Injection & Input Validation) — focus on the prompt field and any URL-fetching logic (SSRF risk from image URLs) — **not yet run**, waiting until remaining credentials (Giphy, Gemini, OpenAI, Upstash) are in so the full pipeline can be exercised end-to-end first.
 
 **Notes:**
+- 2026-08-09: Model choice for all three Claude calls (keyword extraction, captioning, re-ranking) is `claude-haiku-4-5-20251001` — cheapest/fastest tier, since SPEC.md treats API cost as a first-class Phase 1+ concern (R2/R13) and none of these three tasks need a top-tier model. Revisit if caption quality feedback says otherwise.
+- 2026-08-09: Claude calls use tool-use (forced function calling) rather than free-text + parsing, for reliable structured JSON output. Live-tested against a real prompt ("cat confused about taxes") — correct keywords, on-topic caption, and correct re-rank pick with sensible confidence (0.85) between two candidates.
+- 2026-08-09: Confidence threshold gating the Gemini fallback (R1/R2) set to `0.6` as a starting point in `src/app/api/generate/route.ts` — tune against real fallback-trigger rate once live, not guesswork (R2's stated approach), per Recommended Technical Decision #5.
+- 2026-08-09: `@vercel/postgres`-style eager-validation gotcha from Phase 1 does NOT recur here — Anthropic/OpenAI/Upstash/Google GenAI client constructors are all lazy (don't validate keys until a real call is made), so placeholder env values build cleanly. Confirmed via a clean `npm run build` before any real Giphy/Gemini/OpenAI/Upstash credentials existed.
+- 2026-08-09: `@napi-rs/canvas` (server-side render module, FR-7) ships a native `.node` binary that Turbopack can't bundle — required adding `serverExternalPackages: ["@napi-rs/canvas"]` to `next.config.ts`. Discovered via a real build failure, not anticipated in advance.
+- 2026-08-09: "Impact-style font" (FR-7) is rendered using Anton (Google Fonts, OFL-licensed), an open-license Impact-alike — real Impact isn't guaranteed to exist on a serverless Linux container. Font file fetched directly into `src/lib/generation/fonts/` and registered via `GlobalFonts.registerFromPath`.
+- 2026-08-09: Gemini fallback (FR-6) uses `@google/genai`'s dedicated `models.generateImages` with an Imagen model (`imagen-4.0-generate-001`), not the newer "Interactions API" shown first in that package's README — the Interactions API's response shape is a complex turn/step structure poorly suited to a single fire-and-forget image generation, whereas `generateImages` is purpose-built for exactly this and has a simple, well-documented response shape (`response.generatedImages[0].image.imageBytes`). Verified against the installed package's own type definitions, not assumed.
+- 2026-08-09: Added `src/lib/generation/safe-fetch.ts` — an SSRF defense-in-depth guard (host allowlist: Giphy media CDN, Imgflip, our own Blob store) applied before the render module ever fetches an image URL sourced from a third-party API response. Built proactively ahead of this phase's own Audit 2, since Audit 2's checklist explicitly names this exact risk.
+- 2026-08-09: Circuit breaker (R3) state lives in Redis, not in-memory — an in-memory breaker would be nearly meaningless across stateless/concurrent serverless invocations. This means every external call (Claude, Giphy, Imgflip, Gemini, OpenAI moderation) has a hard dependency on Upstash Redis being configured, even ones that otherwise need no API key of their own (e.g. Imgflip) — confirmed directly when a live Imgflip/render test couldn't proceed past the circuit-breaker's Redis check with only a placeholder Upstash URL.
+- 2026-08-09: Curated template library seed script (`scripts/seed-templates.mjs`) run live against the real Blob store from Phase 1 — 40 templates pulled from Imgflip's public (no-key) popular-templates list and permanently re-hosted in Blob, per Section 13's explicit design for this feature. This is a deliberate, SPEC-directed exception to R10's "no permanent re-hosting" rule, which is about not hoarding arbitrary live search pass-through results, not this curated set.
+- 2026-08-09: `visibility`/`share_slug` question aside — `source_type` is set to `"animated"` when the chosen candidate came from Giphy (a GIF) and `"static"` otherwise, matching SPEC.md Section 14's enum, even though Phase 2's render module currently only composites a single static frame from any source (true animated compositing is explicitly Phase 4/5 scope, R9).
+- 2026-08-09: Anthropic API key is real and billed to its own dedicated key (not shared with the user's other Claude Console projects); a small credit balance was added before testing. Giphy, Gemini, OpenAI, and Upstash Redis credentials are still outstanding — Phase 2 code is complete and builds/lints clean, but those four integrations are unverified against live traffic until the user provisions them.
 
 ---
 

@@ -2,7 +2,7 @@
 # Blocks commits containing stray env files or secret-shaped strings.
 # Installed automatically via `npm install` (see package.json "prepare" script).
 
-blocked_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)\.env($|\.[^.]+$)' | grep -v '(^|/)\.env\.example$')
+blocked_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)\.env($|\.[^.]+$)' | grep -Ev '(^|/)\.env\.example$')
 if [ -n "$blocked_files" ]; then
   echo "Blocked commit: staged env file(s) that aren't .env.example:"
   echo "$blocked_files"

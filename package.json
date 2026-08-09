@@ -10,15 +10,22 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "seed:templates": "node scripts/seed-templates.mjs",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "@auth/drizzle-adapter": "^1.11.3",
+    "@google/genai": "^2.16.0",
+    "@napi-rs/canvas": "^1.0.5",
     "@neondatabase/serverless": "^1.1.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.2",
     "@vercel/blob": "^2.7.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.0",
     "next-auth": "^5.0.0-beta.32",
+    "openai": "^7.4.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1"
