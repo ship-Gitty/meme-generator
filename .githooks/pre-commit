@@ -1,0 +1,23 @@
+#!/bin/sh
+# Blocks commits containing stray env files or secret-shaped strings.
+# Installed automatically via `npm install` (see package.json "prepare" script).
+
+blocked_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)\.env($|\.[^.]+$)' | grep -v '(^|/)\.env\.example$')
+if [ -n "$blocked_files" ]; then
+  echo "Blocked commit: staged env file(s) that aren't .env.example:"
+  echo "$blocked_files"
+  echo "These must stay local only. Unstage with: git restore --staged <file>"
+  exit 1
+fi
+
+pattern='(AIza[0-9A-Za-z_-]{35}|gh[pousr]_[0-9A-Za-z]{36,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|postgres(ql)?://[^ ]*:[^ ]*@|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
+
+hits=$(git diff --cached -U0 -- . ':(exclude).githooks/*' | grep -E '^\+' | grep -Ev '^\+\+\+' | grep -E "$pattern")
+if [ -n "$hits" ]; then
+  echo "Blocked commit: this diff contains a secret-shaped string:"
+  echo "$hits"
+  echo "If this is a false positive, adjust the pattern in .githooks/pre-commit."
+  exit 1
+fi
+
+exit 0
